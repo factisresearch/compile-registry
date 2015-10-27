@@ -27,6 +27,7 @@ Usage: compile-registry PORT PG_CONN_STR
 
 ### Supported GHC Versions
 
+* 7.10.2
 
 ### License
 
