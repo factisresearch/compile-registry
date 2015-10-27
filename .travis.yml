@@ -17,4 +17,4 @@ install:
   - stack build --only-snapshot --no-terminal
 
 script:
-  - stack build --no-terminal --pedantic
+  - stack build --pedantic --no-terminal
