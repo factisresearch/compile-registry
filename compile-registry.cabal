@@ -1,0 +1,49 @@
+name:                compile-registry
+version:             0.1.0.0
+synopsis:            Haskell compile artifact registry
+description:         Please see README.md
+homepage:            https://github.com/agrafix/compile-registry
+license:             MIT
+license-file:        LICENSE
+author:              Alexander Thiemann <mail@athiemann.net>
+maintainer:          Alexander Thiemann <mail@athiemann.net>
+copyright:           2015 Alexander Thiemann <mail@athiemann.net>
+category:            Web
+build-type:          Simple
+extra-source-files:
+    README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:
+      CR.Server,
+      CR.Types,
+      CR.InterfaceTypes
+  other-modules:
+      CR.Util.Aeson
+  build-depends:
+      base >= 4.7 && < 5,
+      hasql >=0.7,
+      hasql-postgres >=0.10,
+      aeson >=0.8,
+      bytestring >=0.10,
+      base64-bytestring >=1.0,
+      text >=1.2,
+      mtl >=2.2,
+      Spock >=0.8
+  default-language:    Haskell2010
+
+executable compile-registry
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    base,
+    text >=1.2,
+    compile-registry
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/agrafix/compile-registry
