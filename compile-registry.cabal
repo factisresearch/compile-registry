@@ -18,6 +18,7 @@ tested-with:         GHC==7.10.2
 library
   hs-source-dirs:      src
   exposed-modules:
+      CR.Client,
       CR.Server,
       CR.Types,
       CR.InterfaceTypes
@@ -25,14 +26,21 @@ library
       CR.Util.Aeson
   build-depends:
       base >= 4.7 && < 5,
+      containers >= 0.5,
+      directory >= 1.2,
       hasql >=0.7,
       hasql-postgres >=0.10,
+      lens >= 4.12,
+      lens-aeson >= 1.0,
       aeson >=0.8,
       bytestring >=0.10,
       base64-bytestring >=1.0,
+      time >= 1.2,
+      process >= 1.2,
       text >=1.2,
       mtl >=2.2,
-      Spock >=0.8
+      Spock >=0.8,
+      wreq >= 0.4
   default-language:    Haskell2010
 
 executable compile-registry

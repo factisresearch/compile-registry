@@ -10,6 +10,7 @@ import GHC.Generics
 import Data.Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as B64
+import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
@@ -20,6 +21,9 @@ newtype CpuArch
 newtype InputHash
     = InputHash { unInputHash :: T.Text }
       deriving (Show, Eq, ToJSON, FromJSON)
+
+-- | Denotes the kind of cached file e.g. o-File, hi.-File
+type BuildFileType = T.Text
 
 -- | Usual bytestrings, but with base64 aeson repr
 newtype AsBase64
@@ -52,7 +56,7 @@ instance ToJSON Request where
     toJSON = genericToJSON (aesonOpts 2)
 
 data Response
-   = ResponseCached !ResponseFile
+   = ResponseCached !(M.Map BuildFileType AsBase64)
    | ResponseNotFound
      deriving (Show, Eq, Generic)
 
@@ -62,33 +66,18 @@ instance FromJSON Response where
 instance ToJSON Response where
     toJSON = genericToJSON (aesonOpts 0)
 
-data ResponseFile
-   = ResponseFile
-   { rf_cpuArch :: !CpuArch
-   , rf_inputHash :: !InputHash
-   , rf_oFile :: !AsBase64
-   , rf_hiFile :: !AsBase64
-   } deriving (Show, Eq, Generic)
-
-instance FromJSON ResponseFile where
-    parseJSON = genericParseJSON (aesonOpts 3)
-
-instance ToJSON ResponseFile where
-    toJSON = genericToJSON (aesonOpts 3)
-
-data UploadFile
-   = UploadFile
+data UploadFiles
+   = UploadFiles
    { uf_cpuArch :: !CpuArch
    , uf_inputHash :: !InputHash
-   , uf_oFile :: !AsBase64
-   , uf_hiFile :: !AsBase64
+   , uf_files :: !(M.Map BuildFileType AsBase64)
    , uf_buildTimeSeconds :: !Double
    } deriving (Show, Eq, Generic)
 
-instance FromJSON UploadFile where
+instance FromJSON UploadFiles where
     parseJSON = genericParseJSON (aesonOpts 3)
 
-instance ToJSON UploadFile where
+instance ToJSON UploadFiles where
     toJSON = genericToJSON (aesonOpts 3)
 
 data UploadResponse
