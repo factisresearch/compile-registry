@@ -122,13 +122,13 @@ loadEntry req =
        res <- H.maybeEx (uncurry existsStatement identTpl)
        case (res :: Maybe (Identity Int64)) of
          Just _ ->
-             do files <- H.listEx (uncurry filesStatement identTpl)
+             do buildFiles <- H.listEx (uncurry filesStatement identTpl)
                 let stmtUpdate =
                         [H.stmt|
                           UPDATE buildsteps SET last_access = NOW()
                           WHERE input_hash = ? AND cpu_arch = ?|]
                 H.unitEx (uncurry stmtUpdate identTpl)
-                return $ ResponseCached $ M.map AsBase64 $ M.fromList files
+                return $ ResponseCached $ M.map AsBase64 $ M.fromList buildFiles
          Nothing ->
              return ResponseNotFound
 
