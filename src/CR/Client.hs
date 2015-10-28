@@ -9,7 +9,6 @@ import qualified Data.Traversable as T
 import Control.Lens
 
 import Data.Aeson (toJSON)
-import Data.Aeson.Lens (key, nth)
 import GHC.Generics
 import Data.Time.Clock
 import CR.InterfaceTypes
@@ -50,7 +49,7 @@ data ClientArgs
     }
 
 computeHash :: BuildStep -> IO InputHash
-computeHash bs = undefined -- hash dependecies, cmdline and additionalArgs -- here
+computeHash _bs = undefined -- hash dependecies, cmdline and additionalArgs -- here
 
 trackCmdTime :: IO () -> IO Double
 trackCmdTime cmd =

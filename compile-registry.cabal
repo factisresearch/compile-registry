@@ -31,7 +31,6 @@ library
       hasql >=0.7,
       hasql-postgres >=0.10,
       lens >= 4.12,
-      lens-aeson >= 1.0,
       aeson >=0.8,
       bytestring >=0.10,
       base64-bytestring >=1.0,
