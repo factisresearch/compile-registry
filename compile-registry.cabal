@@ -26,7 +26,10 @@ library
       CR.Util.Aeson
   build-depends:
       base >= 4.7 && < 5,
+      byteable >= 0.1,
+      bytes >= 0.15,
       containers >= 0.5,
+      cryptohash >= 0.11,
       directory >= 1.2,
       hasql >=0.7,
       hasql-postgres >=0.10,

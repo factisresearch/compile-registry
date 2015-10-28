@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 module CR.InterfaceTypes where
 
 -- TODO: this should be an extra package because clients need this
@@ -10,13 +11,16 @@ import GHC.Generics
 import Data.Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as B64
+import qualified Data.Bytes.Serial as SE
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
 newtype CpuArch
     = CpuArch { unCpuArch :: T.Text }
-      deriving (Show, Eq, ToJSON, FromJSON)
+      deriving (Show, Eq, ToJSON, FromJSON,Generic)
+
+instance SE.Serial CpuArch where
 
 newtype InputHash
     = InputHash { unInputHash :: T.Text }
@@ -91,3 +95,9 @@ instance FromJSON UploadResponse where
 
 instance ToJSON UploadResponse where
     toJSON = genericToJSON (aesonOpts 0)
+
+loadEntryEndpoint :: String
+loadEntryEndpoint = "load-files"
+
+storeEntryEndpoint :: String
+storeEntryEndpoint = "upload-files"

@@ -36,7 +36,7 @@ launchServer cfg =
 
 spockApp :: H.Pool HP.Postgres -> SpockT IO ()
 spockApp pool =
-    do post "load-data" $
+    do post (static loadEntryEndpoint) $
          do req <- jsonBody'
             res <-
                 liftIO $ H.session pool $ H.tx Nothing $ loadEntry req
@@ -46,7 +46,7 @@ spockApp pool =
                      json ResponseNotFound
               Right resp ->
                   json resp
-       put "store-data" $
+       put (static storeEntryEndpoint) $
          do req <- jsonBody'
             res <-
                 liftIO $ H.session pool $ H.tx Nothing $ storeEntry req
@@ -65,7 +65,7 @@ storeEntry req =
                [H.stmt|SELECT 1 FROM buildsteps WHERE input_hash = ? AND cpu_arch = ? LIMIT 1|]
        amount <-
            H.maybeEx (uncurry doesExist identTpl)
-       if isJust (amount :: Maybe (Identity Int64))
+       if isOne amount
        then do touchEntry identTpl
                return $ UploadOkayDuplicate
        else do let insertStmt =
@@ -97,8 +97,7 @@ storeEntry req =
 
 touchEntry :: (T.Text, T.Text) -> H.Tx HP.Postgres s ()
 touchEntry identTpl =
-    do let stmtUpdate =
-                        [H.stmt|
+    do let stmtUpdate = [H.stmt|
                           UPDATE buildsteps SET last_access = NOW()
                           WHERE input_hash = ? AND cpu_arch = ?|]
        H.unitEx (uncurry stmtUpdate identTpl)
@@ -119,29 +118,29 @@ loadEntry req =
                    file_type, file_contents
                  FROM files
                  WHERE input_hash = ? AND cpu_arch = ?|]
-       res <- H.maybeEx (uncurry existsStatement identTpl)
-       case (res :: Maybe (Identity Int64)) of
-         Just _ ->
-             do buildFiles <- H.listEx (uncurry filesStatement identTpl)
-                let stmtUpdate =
-                        [H.stmt|
-                          UPDATE buildsteps SET last_access = NOW()
-                          WHERE input_hash = ? AND cpu_arch = ?|]
-                H.unitEx (uncurry stmtUpdate identTpl)
-                return $ ResponseCached $ M.map AsBase64 $ M.fromList buildFiles
-         Nothing ->
-             return ResponseNotFound
+       res <- liftM isOne $ H.maybeEx (uncurry existsStatement identTpl)
+       if res
+       then do buildFiles <- H.listEx (uncurry filesStatement identTpl)
+               let stmtUpdate =
+                       [H.stmt|
+                         UPDATE buildsteps SET last_access = NOW()
+                         WHERE input_hash = ? AND cpu_arch = ?|]
+               H.unitEx (uncurry stmtUpdate identTpl)
+               return $ ResponseCached $ M.map AsBase64 $ M.fromList buildFiles
+       else return ResponseNotFound
+
+isOne :: Maybe (Identity Int64) -> Bool
+isOne = isJust
 
 doesIndexExist :: T.Text -> H.Tx HP.Postgres s Bool
-doesIndexExist idx =
-    do (resultSet :: Maybe (Identity Int64)) <-
-           H.maybeEx $ [H.stmt|SELECT 1
-                            FROM pg_class c
-                            JOIN pg_namespace n ON n.oid = c.relnamespace
-                            WHERE c.relname = ?
-                            AND n.nspname = 'public'
-                       |] idx
-       return (isJust resultSet)
+doesIndexExist =
+    liftM isOne . H.maybeEx .
+        [H.stmt|
+          SELECT 1
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE c.relname = ?
+          AND n.nspname = 'public'|]
 
 setupDatabase :: H.Session HP.Postgres IO ()
 setupDatabase =
@@ -166,6 +165,6 @@ setupDatabase =
                 PRIMARY KEY (cpu_arch, input_hash, file_type)
               )
             |]
-       isThere3 <- doesIndexExist "s_last_acc"
-       unless isThere3 $
-              H.unitEx [H.stmt|CREATE INDEX s_last_acc ON buildsteps USING btree(last_access)|]
+       isThere <- doesIndexExist "s_last_acc"
+       unless isThere $
+           H.unitEx [H.stmt|CREATE INDEX s_last_acc ON buildsteps USING btree(last_access)|]

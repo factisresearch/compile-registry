@@ -7,17 +7,21 @@ import Network.Wreq
 import Control.Monad
 import qualified Data.Traversable as T
 import Control.Lens
-
+import Crypto.Hash
 import Data.Aeson (toJSON)
+import Data.Byteable
 import GHC.Generics
 import Data.Time.Clock
 import CR.InterfaceTypes
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
+import qualified Data.Bytes.Serial as SE
+import Data.Bytes.Put
 import System.Directory
 import System.Process
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 
 data BuildStep
    = BuildStep
@@ -38,6 +42,8 @@ data BuildStep
    }
    deriving (Show, Eq, Generic)
 
+instance SE.Serial BuildStep where
+
 data ClientArgs
     = ClientArgs
     { c_bs :: BuildStep
@@ -49,7 +55,20 @@ data ClientArgs
     }
 
 computeHash :: BuildStep -> IO InputHash
-computeHash _bs = undefined -- hash dependecies, cmdline and additionalArgs -- here
+computeHash buildstep =
+    do depHashes <- forM (S.toAscList $ bs_dependencies buildstep) (liftM md5Hash . BS.readFile)
+       return
+           $ InputHash
+           $ TE.decodeUtf8
+           $ digestToHexByteString
+           $ md5Hash
+           $ BS.concat
+           $ map toBytes
+           $ (md5Hash buildstepBS):depHashes
+    where
+      buildstepBS = runPutS $ SE.serialize buildstep
+      md5Hash :: BS.ByteString -> Digest MD5
+      md5Hash = hash
 
 trackCmdTime :: IO () -> IO Double
 trackCmdTime cmd =
@@ -62,7 +81,7 @@ client :: ClientArgs -> IO ()
 client args =
     do inputHash <- computeHash (c_bs args)
        -- check bloom filter here
-       response <- post (c_url args ++ "/load-data") $ toJSON $
+       response <- post (c_url args ++ loadEntryEndpoint) $ toJSON $
            Request
            { r_inputHash = inputHash
            , r_cpuArch = bs_cpuArch $ c_bs args
@@ -85,7 +104,7 @@ buildStepNotCached inputHash url bs =
            do doesExist <- doesFileExist fp
               unless doesExist $ fail $ concat ["Expected output file: ", fp, " was missing!"]
        files <- flip T.mapM (bs_expectedOutputFiles bs) $ liftM AsBase64 . BS.readFile
-       _ <- post (url ++ "/upload-files") $ toJSON $
+       _ <- put (url ++ storeEntryEndpoint) $ toJSON $
            UploadFiles
            { uf_inputHash = inputHash
            , uf_buildTimeSeconds = time
