@@ -9,12 +9,13 @@ import Control.Monad
 import qualified Data.Traversable as T
 import Control.Lens
 import Crypto.Hash
-import Data.Aeson (toJSON)
+import Data.Aeson (toJSON, encode, eitherDecode')
 import Data.Byteable
 import GHC.Generics
 import Data.Time.Clock
 import CR.InterfaceTypes
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import qualified Data.Bytes.Serial as SE
@@ -78,24 +79,66 @@ trackCmdTime cmd =
        end <- getCurrentTime
        return $ realToFrac $ diffUTCTime end start
 
+loadBloomFilter :: CpuArch -> FilePath -> IO (Either String BloomFilter)
+loadBloomFilter arch bloomFilterFile =
+    do isThere <- doesFileExist bloomFilterFile
+       if isThere
+       then do bsl <- BSL.readFile bloomFilterFile
+               case eitherDecode' bsl of
+                 Left errMsg ->
+                     return (Left errMsg)
+                 Right ok ->
+                     if bre_cpuArch ok /= arch
+                     then return $ Left $
+                              "Bloom filter file " ++ bloomFilterFile
+                              ++ " is for wrong cpu arch (is: " ++ T.unpack (unCpuArch (bre_cpuArch ok))
+                              ++ ", needed: " ++ T.unpack (unCpuArch arch) ++ ")"
+                     else case parseBloomFilter ok of
+                            Nothing ->
+                                return $ Left "Invalid bloom filter bits"
+                            Just bf -> return $ Right bf
+       else return (Left $ "Bloom filter file " ++ bloomFilterFile ++ " not present!")
+
+updateBloomFilter :: CpuArch -> String -> FilePath -> IO ()
+updateBloomFilter arch url bloomFilterFile =
+    do response <-
+           post (url ++ T.unpack (renderRoute loadBloomEndpoint)) $ toJSON $
+           BloomRequest
+           { br_cpuArch = arch
+           }
+       responseJ <- asJSON response
+       case responseJ ^. responseBody of
+         BloomResponseFailed ->
+             fail "Failed to download bloomfilter!"
+         BloomResponseOk bloomData ->
+             BSL.writeFile bloomFilterFile (encode bloomData)
+
 client :: ClientArgs -> IO ()
 client args =
     do inputHash <- computeHash (c_bs args)
-       -- check bloom filter here
-       response <- post (c_url args ++ T.unpack (renderRoute loadEntryEndpoint)) $ toJSON $
-           Request
-           { r_inputHash = inputHash
-           , r_cpuArch = bs_cpuArch $ c_bs args
-           }
-       responseJ <- asJSON response
-       let expectedOutputFiles = bs_expectedOutputFiles $ c_bs args
-       case responseJ ^. responseBody of
-         ResponseCached files
-             | (M.keysSet files) == (M.keysSet expectedOutputFiles) ->
-                 forM_ (M.keysSet files) $ \ft ->
-                     BS.writeFile (expectedOutputFiles M.! ft) (unBase64 $ files M.! ft)
-             | otherwise -> fail "Set of cached files distinct from expected list."
-         ResponseNotFound -> buildStepNotCached inputHash (c_url args) (c_bs args)
+       let runNotCached =
+               buildStepNotCached inputHash (c_url args) (c_bs args)
+       mBloom <- loadBloomFilter (bs_cpuArch $ c_bs args) (c_bloomFilter args)
+       case mBloom of
+         Right bloom | bloomContains inputHash bloom ->
+             do response <- post (c_url args ++ T.unpack (renderRoute loadEntryEndpoint)) $ toJSON $
+                   Request
+                   { r_inputHash = inputHash
+                   ,  r_cpuArch = bs_cpuArch $ c_bs args
+                   }
+                responseJ <- asJSON response
+                let expectedOutputFiles = bs_expectedOutputFiles $ c_bs args
+                case responseJ ^. responseBody of
+                  ResponseCached files
+                      | (M.keysSet files) == (M.keysSet expectedOutputFiles) ->
+                          forM_ (M.keysSet files) $ \ft ->
+                              BS.writeFile (expectedOutputFiles M.! ft) (unBase64 $ files M.! ft)
+                      | otherwise -> fail "Set of cached files distinct from expected list."
+                  ResponseNotFound -> runNotCached
+         Right _ -> runNotCached
+         Left err ->
+             do putStrLn ("Warning: not using bloom filter: " ++ err)
+                runNotCached
 
 buildStepNotCached :: InputHash -> String -> BuildStep -> IO ()
 buildStepNotCached inputHash url bs =

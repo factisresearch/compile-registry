@@ -176,3 +176,6 @@ parseBloomFilter bre =
              Right ok ->
                  return ok
        return $ emptyBloomFilter { BF.bitArray = bitArray }
+
+bloomContains :: InputHash -> BloomFilter -> Bool
+bloomContains = BF.elem
