@@ -11,9 +11,12 @@ import CR.Util.Aeson
 import Web.Spock.Safe
 import GHC.Generics
 import Data.Aeson
+import qualified Data.BloomFilter as BF
+import qualified Data.BloomFilter.Hash as BFH
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Bytes.Serial as SE
+import qualified Data.Serialize as S
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -103,3 +106,54 @@ loadEntryEndpoint = "v1" <//> "load-files"
 
 storeEntryEndpoint :: Path '[]
 storeEntryEndpoint = "v1" <//> "upload-files"
+
+data BloomRequest
+   = BloomRequest
+   { br_cpuArch :: !CpuArch
+   } deriving (Show, Eq, Generic)
+
+instance FromJSON BloomRequest where
+    parseJSON = genericParseJSON (aesonOpts 3)
+
+instance ToJSON BloomRequest where
+    toJSON = genericToJSON (aesonOpts 3)
+
+data BloomResponse
+   = BloomResponse
+   { bre_cpuArch :: !CpuArch
+   , bre_data :: !AsBase64
+   } deriving (Show, Eq, Generic)
+
+instance FromJSON BloomResponse where
+    parseJSON = genericParseJSON (aesonOpts 4)
+
+instance ToJSON BloomResponse where
+    toJSON = genericToJSON (aesonOpts 4)
+
+-- | Bloomfilter size in bits, MUST be equal on server and client (!)
+bloomFilterSize :: Int
+bloomFilterSize = 1014
+
+-- | Bloomfilter hash function, must be equal on server and client (!)
+bloomFilterHash :: InputHash -> [BF.Hash]
+bloomFilterHash (InputHash txt) = BFH.cheapHashes 2 (T.unpack txt)
+
+emptyBloomFilter :: BF.Bloom InputHash
+emptyBloomFilter = BF.empty bloomFilterHash bloomFilterSize
+
+serializeBloomFilter :: CpuArch -> BF.Bloom InputHash -> BloomResponse
+serializeBloomFilter arch bf =
+    BloomResponse
+    { bre_cpuArch = arch
+    , bre_data = AsBase64 $ S.encode $ BF.bitArray bf
+    }
+
+parseBloomFilter :: Monad m => BloomResponse -> m (BF.Bloom InputHash)
+parseBloomFilter bre =
+    do bitArray <-
+           case S.decode (unBase64 $ bre_data bre) of
+             Left err ->
+                 fail err
+             Right ok ->
+                 return ok
+       return $ emptyBloomFilter { BF.bitArray = bitArray }
