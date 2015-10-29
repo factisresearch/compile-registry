@@ -36,7 +36,7 @@ launchServer cfg =
 
 spockApp :: H.Pool HP.Postgres -> SpockT IO ()
 spockApp pool =
-    do post (static loadEntryEndpoint) $
+    do post loadEntryEndpoint $
          do req <- jsonBody'
             res <-
                 liftIO $ H.session pool $ H.tx Nothing $ loadEntry req
@@ -46,7 +46,7 @@ spockApp pool =
                      json ResponseNotFound
               Right resp ->
                   json resp
-       put (static storeEntryEndpoint) $
+       put storeEntryEndpoint $
          do req <- jsonBody'
             res <-
                 liftIO $ H.session pool $ H.tx Nothing $ storeEntry req

@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -7,6 +8,7 @@ module CR.InterfaceTypes where
 
 import CR.Util.Aeson
 
+import Web.Spock.Safe
 import GHC.Generics
 import Data.Aeson
 import qualified Data.ByteString as BS
@@ -96,8 +98,8 @@ instance FromJSON UploadResponse where
 instance ToJSON UploadResponse where
     toJSON = genericToJSON (aesonOpts 0)
 
-loadEntryEndpoint :: String
-loadEntryEndpoint = "load-files"
+loadEntryEndpoint :: Path '[]
+loadEntryEndpoint = "v1" <//> "load-files"
 
-storeEntryEndpoint :: String
-storeEntryEndpoint = "upload-files"
+storeEntryEndpoint :: Path '[]
+storeEntryEndpoint = "v1" <//> "upload-files"

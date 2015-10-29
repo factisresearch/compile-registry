@@ -4,6 +4,7 @@ module CR.Client where
 
 import Network.Wreq
 
+import Web.Spock.Safe (renderRoute)
 import Control.Monad
 import qualified Data.Traversable as T
 import Control.Lens
@@ -81,7 +82,7 @@ client :: ClientArgs -> IO ()
 client args =
     do inputHash <- computeHash (c_bs args)
        -- check bloom filter here
-       response <- post (c_url args ++ loadEntryEndpoint) $ toJSON $
+       response <- post (c_url args ++ T.unpack (renderRoute loadEntryEndpoint)) $ toJSON $
            Request
            { r_inputHash = inputHash
            , r_cpuArch = bs_cpuArch $ c_bs args
@@ -104,7 +105,7 @@ buildStepNotCached inputHash url bs =
            do doesExist <- doesFileExist fp
               unless doesExist $ fail $ concat ["Expected output file: ", fp, " was missing!"]
        files <- flip T.mapM (bs_expectedOutputFiles bs) $ liftM AsBase64 . BS.readFile
-       _ <- put (url ++ storeEntryEndpoint) $ toJSON $
+       _ <- put (url ++ T.unpack (renderRoute storeEntryEndpoint)) $ toJSON $
            UploadFiles
            { uf_inputHash = inputHash
            , uf_buildTimeSeconds = time
