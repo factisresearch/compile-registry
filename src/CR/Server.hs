@@ -7,6 +7,7 @@ module CR.Server where
 import CR.Types
 import CR.InterfaceTypes
 
+import Data.Aeson (ToJSON, FromJSON)
 import Data.Maybe
 import Data.Int
 import Control.Monad
@@ -34,28 +35,29 @@ launchServer cfg =
              putStrLn "Done."
        runSpock (c_port cfg) $ spockT id (spockApp pool)
 
+runDbEndpoint :: (FromJSON req, ToJSON resp) => H.Pool HP.Postgres -> resp -> (req -> H.Session HP.Postgres IO resp) -> ActionT IO ()
+runDbEndpoint pool errorResp runner =
+    do req <- jsonBody'
+       res <-
+           liftIO $ H.session pool $ runner req
+       case res of
+         Left err ->
+             do liftIO $ putStrLn $ "Something bad happened: " ++ show err
+                json errorResp
+         Right resp ->
+             json resp
+
 spockApp :: H.Pool HP.Postgres -> SpockT IO ()
 spockApp pool =
     do post loadEntryEndpoint $
-         do req <- jsonBody'
-            res <-
-                liftIO $ H.session pool $ H.tx Nothing $ loadEntry req
-            case res of
-              Left err ->
-                  do liftIO $ putStrLn $ "Something bad happened: " ++ show err
-                     json ResponseNotFound
-              Right resp ->
-                  json resp
+         runDbEndpoint pool ResponseNotFound $ \req -> H.tx Nothing $ loadEntry req
        put storeEntryEndpoint $
-         do req <- jsonBody'
-            res <-
-                liftIO $ H.session pool $ H.tx Nothing $ storeEntry req
-            case res of
-              Left err ->
-                  do liftIO $ putStrLn $ "Something bad happened: " ++ show err
-                     json UploadError
-              Right resp ->
-                  json resp
+         runDbEndpoint pool UploadError $ \req -> H.tx Nothing $ storeEntry req
+       post loadBloomEndpoint $
+         runDbEndpoint pool BloomResponseFailed $ \req ->
+             H.tx Nothing $ -- TODO: cache this, or compute periodically
+             do bf <- computeBloomFilter (br_cpuArch req)
+                return $ BloomResponseOk $ serializeBloomFilter (br_cpuArch req) bf
 
 storeEntry :: UploadFiles -> H.Tx HP.Postgres s UploadResponse
 storeEntry req =
@@ -128,6 +130,19 @@ loadEntry req =
                H.unitEx (uncurry stmtUpdate identTpl)
                return $ ResponseCached $ M.map AsBase64 $ M.fromList buildFiles
        else return ResponseNotFound
+
+computeBloomFilter :: CpuArch -> H.Tx HP.Postgres s BloomFilter
+computeBloomFilter (CpuArch arch) =
+    do let hashStatement =
+               [H.stmt|
+                SELECT
+                   input_hash
+                FROM buildsteps
+                WHERE cpu_arch = ?|]
+       hashes <-
+           map (InputHash . runIdentity)
+           <$> H.listEx (hashStatement arch)
+       return $! bloomFilterFromList hashes
 
 isOne :: Maybe (Identity Int64) -> Bool
 isOne = isJust

@@ -107,6 +107,9 @@ loadEntryEndpoint = "v1" <//> "load-files"
 storeEntryEndpoint :: Path '[]
 storeEntryEndpoint = "v1" <//> "upload-files"
 
+loadBloomEndpoint :: Path '[]
+loadBloomEndpoint = "v1" <//> "load-bloom"
+
 data BloomRequest
    = BloomRequest
    { br_cpuArch :: !CpuArch
@@ -119,16 +122,29 @@ instance ToJSON BloomRequest where
     toJSON = genericToJSON (aesonOpts 3)
 
 data BloomResponse
-   = BloomResponse
+   = BloomResponseOk !BloomResponseData
+   | BloomResponseFailed
+     deriving (Show, Eq, Generic)
+
+instance FromJSON BloomResponse where
+    parseJSON = genericParseJSON (aesonOpts 0)
+
+instance ToJSON BloomResponse where
+    toJSON = genericToJSON (aesonOpts 0)
+
+data BloomResponseData
+   = BloomResponseData
    { bre_cpuArch :: !CpuArch
    , bre_data :: !AsBase64
    } deriving (Show, Eq, Generic)
 
-instance FromJSON BloomResponse where
+instance FromJSON BloomResponseData where
     parseJSON = genericParseJSON (aesonOpts 4)
 
-instance ToJSON BloomResponse where
+instance ToJSON BloomResponseData where
     toJSON = genericToJSON (aesonOpts 4)
+
+type BloomFilter = BF.Bloom InputHash
 
 -- | Bloomfilter size in bits, MUST be equal on server and client (!)
 bloomFilterSize :: Int
@@ -138,17 +154,20 @@ bloomFilterSize = 1014
 bloomFilterHash :: InputHash -> [BF.Hash]
 bloomFilterHash (InputHash txt) = BFH.cheapHashes 2 (T.unpack txt)
 
-emptyBloomFilter :: BF.Bloom InputHash
+emptyBloomFilter :: BloomFilter
 emptyBloomFilter = BF.empty bloomFilterHash bloomFilterSize
 
-serializeBloomFilter :: CpuArch -> BF.Bloom InputHash -> BloomResponse
+bloomFilterFromList :: [InputHash] -> BloomFilter
+bloomFilterFromList = BF.fromList bloomFilterHash bloomFilterSize
+
+serializeBloomFilter :: CpuArch -> BloomFilter -> BloomResponseData
 serializeBloomFilter arch bf =
-    BloomResponse
+    BloomResponseData
     { bre_cpuArch = arch
     , bre_data = AsBase64 $ S.encode $ BF.bitArray bf
     }
 
-parseBloomFilter :: Monad m => BloomResponse -> m (BF.Bloom InputHash)
+parseBloomFilter :: Monad m => BloomResponseData -> m BloomFilter
 parseBloomFilter bre =
     do bitArray <-
            case S.decode (unBase64 $ bre_data bre) of
