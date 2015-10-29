@@ -32,4 +32,4 @@ Usage: compile-registry PORT PG_CONN_STR
 ### License
 
 Released under the MIT license.
-2015 Alexander Thiemann <mail@athiemann.net>
+(c) 2015 Emin Karayel <me@eminkarayel.de>, Alexander Thiemann <mail@athiemann.net>
