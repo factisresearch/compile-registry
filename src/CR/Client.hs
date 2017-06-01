@@ -4,7 +4,7 @@ module CR.Client where
 
 import Network.Wreq
 
-import Web.Spock.Safe (renderRoute)
+import Web.Spock (renderRoute)
 import Control.Monad
 import qualified Data.Traversable as T
 import Control.Lens
