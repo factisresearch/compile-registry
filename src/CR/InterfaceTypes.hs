@@ -8,7 +8,8 @@ module CR.InterfaceTypes where
 
 import CR.Util.Aeson
 
-import Web.Spock.Safe
+import Web.Spock
+import Web.Routing.Combinators
 import GHC.Generics
 import Data.Aeson
 import qualified Data.BloomFilter as BF
@@ -101,13 +102,13 @@ instance FromJSON UploadResponse where
 instance ToJSON UploadResponse where
     toJSON = genericToJSON (aesonOpts 0)
 
-loadEntryEndpoint :: Path '[]
+loadEntryEndpoint :: Path '[] Open
 loadEntryEndpoint = "v1" <//> "load-files"
 
-storeEntryEndpoint :: Path '[]
+storeEntryEndpoint :: Path '[] Open
 storeEntryEndpoint = "v1" <//> "upload-files"
 
-loadBloomEndpoint :: Path '[]
+loadBloomEndpoint :: Path '[] Open
 loadBloomEndpoint = "v1" <//> "load-bloom"
 
 data BloomRequest
